@@ -32,7 +32,7 @@ func Logger(opts ...Option) *slog.Logger {
 	var handlerOpts = &slog.HandlerOptions{
 		AddSource:   c.addSource,
 		Level:       c.level(*logLevel),
-		ReplaceAttr: c.replaceAttr,
+		ReplaceAttr: c.levelReplaceAttr,
 	}
 
 	var handler slog.Handler
@@ -50,24 +50,26 @@ func Logger(opts ...Option) *slog.Logger {
 }
 
 type config struct {
-	addSource    bool
-	customLevels map[string]slog.Level
-	defaultLevel slog.Level
-	oldLogLevel  slog.Level
-	replaceAttr  func(groups []string, a slog.Attr) slog.Attr
-	setDefault   bool
-	writer       io.Writer
+	addSource        bool
+	customLevels     map[string]slog.Level
+	customLevelNames map[slog.Level]string
+	defaultLevel     slog.Level
+	oldLogLevel      slog.Level
+	replaceAttr      func(groups []string, a slog.Attr) slog.Attr
+	setDefault       bool
+	writer           io.Writer
 }
 
 func newConfig(opts []Option) *config {
 	c := &config{
-		addSource:    false,
-		defaultLevel: slog.LevelInfo,
-		oldLogLevel:  slog.LevelInfo,
-		customLevels: map[string]slog.Level{},
-		replaceAttr:  nil,
-		setDefault:   false,
-		writer:       os.Stdout,
+		addSource:        false,
+		defaultLevel:     slog.LevelInfo,
+		oldLogLevel:      slog.LevelInfo,
+		customLevels:     map[string]slog.Level{},
+		customLevelNames: map[slog.Level]string{},
+		replaceAttr:      nil,
+		setDefault:       false,
+		writer:           os.Stdout,
 	}
 
 	for _, opt := range opts {
@@ -91,6 +93,20 @@ func (c *config) level(requested string) slog.Level {
 	return c.defaultLevel
 }
 
+func (c *config) levelReplaceAttr(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == slog.LevelKey {
+		if name, ok := c.customLevelNames[a.Value.Any().(slog.Level)]; ok {
+			a = slog.String(slog.LevelKey, name)
+		}
+	}
+
+	if c.replaceAttr != nil {
+		return c.replaceAttr(groups, a)
+	}
+
+	return a
+}
+
 type Option func(*config)
 
 // WithAddSource controls whether the source code location will be added to
@@ -104,10 +120,20 @@ func WithAddSource(addSource bool) Option {
 // WithCustomLevels adds extra levels to the defaults available in the
 // `log.level` flag. The same level may be specified with multiple different
 // keys to provide aliases.
+//
+// The "level" attribute of log messages will automatically be rewritten
+// if the level matches a custom attribute. If multiple aliases are defined
+// for the same level, the alias that comes first lexicographically will
+// be used.
 func WithCustomLevels(levels map[string]slog.Level) Option {
 	return func(c *config) {
 		for k, v := range levels {
 			c.customLevels[strings.ToLower(k)] = v
+
+			upperK := strings.ToUpper(k)
+			if existing, ok := c.customLevelNames[v]; !ok || upperK < existing {
+				c.customLevelNames[v] = upperK
+			}
 		}
 	}
 }
