@@ -29,9 +29,11 @@ func Logger(opts ...Option) *slog.Logger {
 
 	slog.SetLogLoggerLevel(c.oldLogLevel)
 
+	resolvedLevel, levelOK := c.level(*logLevel)
+
 	var handlerOpts = &slog.HandlerOptions{
 		AddSource:   c.addSource,
-		Level:       c.level(*logLevel),
+		Level:       resolvedLevel,
 		ReplaceAttr: c.levelReplaceAttr,
 	}
 
@@ -46,6 +48,11 @@ func Logger(opts ...Option) *slog.Logger {
 	if c.setDefault {
 		slog.SetDefault(logger)
 	}
+
+	if !levelOK {
+		logger.Warn("Unknown log level, using default", "requested", *logLevel, "default", resolvedLevel)
+	}
+
 	return logger
 }
 
@@ -79,18 +86,22 @@ func newConfig(opts []Option) *config {
 	return c
 }
 
-func (c *config) level(requested string) slog.Level {
+func (c *config) level(requested string) (slog.Level, bool) {
+	if requested == "" {
+		return c.defaultLevel, true
+	}
+
 	target := strings.ToLower(requested)
 
 	if r, ok := defaultLevels[target]; ok {
-		return r
+		return r, true
 	}
 
 	if r, ok := c.customLevels[target]; ok {
-		return r
+		return r, true
 	}
 
-	return c.defaultLevel
+	return c.defaultLevel, false
 }
 
 func (c *config) levelReplaceAttr(groups []string, a slog.Attr) slog.Attr {

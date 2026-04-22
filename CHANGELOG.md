@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 - 2026-04-22
+
+### Other changes
+
+* A warning is now logged if an invalid log level is specified.
+  Previously this was a silent fallback to the default.
+
 ## 1.1.0 - 2025-05-17
 
 ### Features

@@ -201,29 +201,39 @@ func Test_CustomLevelJSON(t *testing.T) {
 
 func Test_CustomLevelAliasLexicographicOrder(t *testing.T) {
 	_ = flag.Set("log.format", "")
-	_ = flag.Set("log.level", "custom")
+	_ = flag.Set("log.level", "zebra")
 
 	custom := slog.Level(10)
 	w := new(bytes.Buffer)
-	
-	// First add "zebra", then "alpha" - should keep "alpha" since it's lexicographically first
-	l := LoggerForTest(w, 
+
+	l := LoggerForTest(w,
 		WithCustomLevels(map[string]slog.Level{"zebra": custom}),
 		WithCustomLevels(map[string]slog.Level{"alpha": custom}),
 	)
-	
+
 	l.Log(context.Background(), custom, "Test")
-	
+
 	assert.Equal(t, "time=fake-time level=ALPHA msg=Test\n", w.String())
-	
-	// Now test the reverse order - add "alpha" then "zebra", should keep "alpha"
+
 	w.Reset()
 	l = LoggerForTest(w,
 		WithCustomLevels(map[string]slog.Level{"alpha": custom}),
 		WithCustomLevels(map[string]slog.Level{"zebra": custom}),
 	)
-	
+
 	l.Log(context.Background(), custom, "Test")
-	
+
 	assert.Equal(t, "time=fake-time level=ALPHA msg=Test\n", w.String())
+}
+
+func Test_WarnsOnUnknownLevel(t *testing.T) {
+	_ = flag.Set("log.format", "")
+	_ = flag.Set("log.level", "bogus")
+
+	w := new(bytes.Buffer)
+	l := LoggerForTest(w)
+	l.Info("Test")
+
+	assert.Contains(t, w.String(), "level=WARN msg=\"Unknown log level, using default\" requested=bogus default=INFO\n")
+	assert.Contains(t, w.String(), "level=INFO msg=Test\n")
 }
